@@ -2,8 +2,8 @@
 
 A polished desktop recipe manager for Windows. Scrape recipes from any cooking website, build shopping lists, plan meals, and export to PDF — all in a native desktop app with no browser needed.
 
-[![Latest Release](https://img.shields.io/github/v/release/marshallatimi/MacleayChef?label=download&logo=github)](https://github.com/marshallatimi/MacleayChef/releases/latest)
-[![Build](https://github.com/marshallatimi/MacleayChef/actions/workflows/build.yml/badge.svg)](https://github.com/marshallatimi/MacleayChef/actions/workflows/build.yml)
+[![Latest Release](https://img.shields.io/github/v/release/timothyamarshall/MacleayChef?label=download&logo=github)](https://github.com/timothyamarshall/MacleayChef/releases/latest)
+[![Build](https://github.com/timothyamarshall/MacleayChef/actions/workflows/build.yml/badge.svg)](https://github.com/timothyamarshall/MacleayChef/actions/workflows/build.yml)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -73,7 +73,7 @@ Your data is saved in `Documents\MacleayChef\` — it survives updates and unins
 ### Run from source (Python 3.10+)
 
 ```bash
-git clone https://github.com/marshallatimi/MacleayChef.git
+git clone https://github.com/timothyamarshall/MacleayChef.git
 cd MacleayChef
 pip install -r requirements.txt
 python launcher.py

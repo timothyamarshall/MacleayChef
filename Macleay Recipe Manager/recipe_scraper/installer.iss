@@ -16,9 +16,9 @@ AppId={#AppId}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher={#AppPublisher}
-AppPublisherURL=https://github.com/marshallatimi/MacleayChef
-AppSupportURL=https://github.com/marshallatimi/MacleayChef/issues
-AppUpdatesURL=https://github.com/marshallatimi/MacleayChef/releases
+AppPublisherURL=https://github.com/timothyamarshall/MacleayChef
+AppSupportURL=https://github.com/timothyamarshall/MacleayChef/issues
+AppUpdatesURL=https://github.com/timothyamarshall/MacleayChef/releases
 
 ; Install to Program Files
 DefaultDirName={autopf}\{#AppName}

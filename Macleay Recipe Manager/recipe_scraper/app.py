@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, send_from_directory, g, Response, redirect
 from recipe_scrapers import scrape_me
 import sqlite3
+from contextlib import closing
 import json
 import re
 import os
@@ -23,7 +24,7 @@ try:
 except ImportError:
     APP_VERSION = "dev"
 
-GITHUB_REPO = "marshallatimi/MacleayChef"
+GITHUB_REPO = "timothyamarshall/MacleayChef"
 
 # ── Path setup (works both in development and as a PyInstaller .exe) ──────────
 # BASE_DIR  = where the bundled files live (read-only when frozen)
@@ -109,9 +110,8 @@ def get_cookbooks_list():
             return  # Don't create empty SQLite files by connecting to missing paths
         name = os.path.splitext(os.path.basename(path))[0]
         try:
-            c = sqlite3.connect(path)
-            count = c.execute("SELECT COUNT(*) FROM recipes").fetchone()[0]
-            c.close()
+            with closing(sqlite3.connect(path)) as c:
+                count = c.execute("SELECT COUNT(*) FROM recipes").fetchone()[0]
         except Exception:
             count = 0
         books.append({
@@ -277,7 +277,8 @@ def close_db(exception):
 
 
 def init_db():
-    with sqlite3.connect(active_db_path()) as conn:
+    # closing(): `with connect()` alone only commits, and the open handle locks the file on Windows
+    with closing(sqlite3.connect(active_db_path())) as conn, conn:
         # Single-file mode — no WAL sidecars (.shm/.wal) so cloud drives sync cleanly
         conn.execute("PRAGMA journal_mode=DELETE")
         conn.execute("PRAGMA synchronous=FULL")
@@ -995,6 +996,10 @@ def list_recipes():
     rows = get_db().execute(
         "SELECT id,title,servings,servings_num,"
         "ingredient_groups,instruction_groups,total_time,site_name,source_url,"
+        # Flat lists only when there are no groups (imports, older cookbooks) —
+        # row_to_dict builds the groups from them; otherwise they'd come back empty.
+        "CASE WHEN ingredient_groups IS NULL OR ingredient_groups='' THEN ingredients END AS ingredients,"
+        "CASE WHEN instruction_groups IS NULL OR instruction_groups='' THEN instructions END AS instructions,"
         "category,categories,notes,view_count,created_at,updated_at,base_recipe,scale_by_batch,"
         "directions_text,collection_id,"
         "(image IS NOT NULL AND image != '') AS has_image"
@@ -1166,6 +1171,9 @@ def parse_text_recipe(text):
         re.IGNORECASE,
     )
 
+    # "Serves 20" / "Makes 12" / "Yield: 4 dozen" — colon optional when a number follows
+    SERVES = re.compile(r'^(?:servings?|serves?|yields?|makes)\s*:?\s*(?P<val>\d.*)$', re.IGNORECASE)
+
     ingredients, instructions = [], []
     meta = {}
     current = None
@@ -1174,6 +1182,12 @@ def parse_text_recipe(text):
         stripped = line.strip()
         m_sec = SECTION.match(stripped)
         m_inl = INLINE.match(stripped)
+        m_srv = SERVES.match(stripped) if current not in ("ing", "ins") else None
+
+        if m_srv and not meta.get("servings"):
+            meta["servings"] = m_srv.group("val").strip()
+            current = None
+            continue
 
         if m_sec:
             key = m_sec.group("key").lower().rstrip("s")
@@ -1206,7 +1220,10 @@ def parse_text_recipe(text):
         if not stripped:
             continue
 
-        if current == "ing":
+        if current == "serving":          # "Servings:" header, number on the next line
+            meta.setdefault("servings", stripped)
+            current = None
+        elif current == "ing":
             ingredients.append(stripped)
         elif current == "ins":
             instructions.append(stripped)
@@ -1335,9 +1352,8 @@ def import_recipes_peek():
     try:
         if ext == ".cookbook":
             try:
-                conn2 = sqlite3.connect(tmp.name)
-                count = conn2.execute("SELECT COUNT(*) FROM recipes").fetchone()[0]
-                conn2.close()
+                with closing(sqlite3.connect(tmp.name)) as conn2:
+                    count = conn2.execute("SELECT COUNT(*) FROM recipes").fetchone()[0]
             except Exception:
                 count = 0
             return jsonify({"type": "cookbook", "recipeCount": count})
@@ -1569,7 +1585,12 @@ def parse_mealmaster(text):
                             ing_groups[-1]["ingredients"][-1] += " " + name.lstrip("- ").strip()
                             is_ing = True
                     else:
-                        parts = [qty.strip(), unit.strip(), name]
+                        unit = unit.strip()
+                        if unit in _MM_SIZE_MAP:      # sm/md/lg → part of the name
+                            name, unit = _MM_SIZE_MAP[unit] + " " + name, ""
+                        else:                          # c → Cup, tb → Tablespoon … (so it scales)
+                            unit = _MM_UNIT_MAP.get(unit, unit)
+                        parts = [qty.strip(), unit, name]
                         ing_groups[-1]["ingredients"].append(" ".join(p for p in parts if p))
                         is_ing = True
             # Fallback for files whose column alignment was lost (copied/reflowed):
@@ -1652,10 +1673,9 @@ def import_recipes_to_current():
                 if r:
                     recipes = [r]
         elif ext == ".cookbook":
-            conn2 = sqlite3.connect(tmp.name)
-            conn2.row_factory = sqlite3.Row
-            rows = conn2.execute("SELECT * FROM recipes").fetchall()
-            conn2.close()
+            with closing(sqlite3.connect(tmp.name)) as conn2:
+                conn2.row_factory = sqlite3.Row
+                rows = conn2.execute("SELECT * FROM recipes").fetchall()
             recipes = [row_to_dict(r) for r in rows]
         elif ext == ".csv":
             _csv_type, recipes = detect_and_parse_csv(tmp.name)
@@ -1816,6 +1836,19 @@ def _bad_image(_e):
     return jsonify({"error": "That file isn't a supported image (try JPG or PNG)."}), 400
 
 
+@app.errorhandler(Exception)
+def _unexpected_error(e):
+    # JSON instead of Flask's HTML page, so the app can show the message
+    # (callers do `await res.json()` and show data.error). HTTP errors (404…) pass through.
+    from werkzeug.exceptions import HTTPException
+    if isinstance(e, HTTPException):
+        return e
+    app.logger.exception("Unhandled error")
+    if isinstance(e, PermissionError):
+        return jsonify({"error": "The file is in use by another program. Close it and try again."}), 500
+    return jsonify({"error": f"Something went wrong: {e}"}), 500
+
+
 def _path_to_data_uri(path, max_side=1200, quality=82):
     """Same as _image_file_to_data_uri but reads from a filesystem path.
     Used by the init_db migration that embeds legacy upload files."""
@@ -1958,8 +1991,8 @@ def restore_recipe(rid):
         INSERT OR REPLACE INTO recipes
             (id, title, servings, servings_num, ingredient_groups, instruction_groups,
              image, total_time, site_name, source_url, categories, category, notes,
-             view_count, created_at, base_recipe, scale_by_batch, directions_text)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+             view_count, created_at, base_recipe, scale_by_batch, directions_text, collection_id)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     """, (
         rid,
         data.get("title"),
@@ -1979,6 +2012,7 @@ def restore_recipe(rid):
         data.get("base_recipe"),
         data.get("scale_by_batch", 0),
         data.get("directions_text"),
+        data.get("collection_id"),
     ))
     db.commit()
     return jsonify({"ok": True, "id": rid})
@@ -2898,9 +2932,8 @@ def link_cookbook():
         return jsonify({"error": "File not found"}), 404
     # Validate it's a real cookbook
     try:
-        c = sqlite3.connect(lpath)
-        c.execute("SELECT COUNT(*) FROM recipes")
-        c.close()
+        with closing(sqlite3.connect(lpath)) as c:
+            c.execute("SELECT COUNT(*) FROM recipes")
     except Exception:
         return jsonify({"error": "Not a valid cookbook file"}), 400
     # Run schema migration on it so it has all current columns
@@ -3534,9 +3567,8 @@ def restore_backup():
     backup_path = abs_backup
     # Validate it's a valid SQLite cookbook
     try:
-        conn = sqlite3.connect(backup_path)
-        conn.execute("SELECT COUNT(*) FROM recipes")
-        conn.close()
+        with closing(sqlite3.connect(backup_path)) as conn:
+            conn.execute("SELECT COUNT(*) FROM recipes")
     except Exception:
         return jsonify({"error": "Invalid backup file"}), 400
     # Determine which cookbook this backup belongs to (by name in filename)
@@ -3974,8 +4006,9 @@ _MM_SIZE_MAP = {
 
 # Unit abbreviations → expanded form.  Omit an abbreviation to leave it as-is.
 _MM_UNIT_MAP = {
-    'T':  'Tablespoon',  'Tb': 'Tablespoon',
-    't':  'Teaspoon',
+    'T':  'Tablespoon',  'Tb': 'Tablespoon',  'tb': 'Tablespoon',
+    't':  'Teaspoon',    'ts': 'Teaspoon',
+    'ga': 'Gallon',
     'c':  'Cup',
     'cn': 'Can',
     'pn': 'Pinch',
@@ -4239,7 +4272,7 @@ def upload_temp_cookbook():
     suggested = os.path.splitext(f.filename)[0]
     if ext == ".cookbook":
         try:
-            with sqlite3.connect(tmp.name) as c:
+            with closing(sqlite3.connect(tmp.name)) as c:
                 count = c.execute("SELECT COUNT(*) FROM recipes").fetchone()[0]
         except Exception:
             count = 0
@@ -4269,9 +4302,8 @@ def peek_cookbook():
     ext = os.path.splitext(path)[1].lower()
     if ext == ".cookbook":
         try:
-            c = sqlite3.connect(path)
-            count = c.execute("SELECT COUNT(*) FROM recipes").fetchone()[0]
-            c.close()
+            with closing(sqlite3.connect(path)) as c:
+                count = c.execute("SELECT COUNT(*) FROM recipes").fetchone()[0]
         except Exception:
             count = 0
         return jsonify({"type": "cookbook", "recipeCount": count,
@@ -4308,7 +4340,7 @@ def import_cookbook():
         import shutil
         shutil.copy2(src_path, dest_path)
         try:
-            with sqlite3.connect(dest_path) as c:
+            with closing(sqlite3.connect(dest_path)) as c:
                 count = c.execute("SELECT COUNT(*) FROM recipes").fetchone()[0]
         except Exception:
             count = 0

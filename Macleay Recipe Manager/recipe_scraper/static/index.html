@@ -298,6 +298,7 @@
     /* Sort/filter bar */
     .grid-controls { display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem; align-items:center; justify-content:space-between; }
     .grid-controls-left { display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; flex:1; min-width:0; }
+    .ctl-pair { display:inline-flex; align-items:center; gap:0.4rem; white-space:nowrap; }   /* label stays with its control when the bar wraps */
     .grid-controls-right { display:flex; gap:0.5rem; align-items:center; flex-shrink:0; }
     .grid-search-input { padding:0.45rem 0.75rem; border:2px solid var(--border); border-radius:7px; font-size:0.88rem; font-family:inherit; background:var(--card); color:var(--text); outline:none; min-width:160px; flex:1; transition:border-color 0.2s; }
     .grid-search-input:focus { border-color:var(--red); }
@@ -640,7 +641,7 @@
           <option value="title">🔍 By Title</option>
           <option value="ingredient">🧄 By Ingredient</option>
         </select>
-        <label>Sort:</label>
+        <span class="ctl-pair"><label>Sort:</label>
         <select id="sort-select" onchange="applySort()">
           <option value="newest">Newest</option>
           <option value="oldest">Oldest</option>
@@ -648,18 +649,18 @@
           <option value="za">Z → A</option>
           <option value="category">By Category</option>
           <option value="mostused">Most Used</option>
-        </select>
-        <label>Category:</label>
+        </select></span>
+        <span class="ctl-pair"><label>Category:</label>
         <div id="cat-filter-wrap" style="position:relative;display:inline-block">
           <button id="cat-filter-btn" onclick="toggleCatFilterDropdown(event)"
             style="padding:0.3rem 0.55rem;border:1px solid var(--border);border-radius:5px;background:var(--card);color:var(--text);font-size:0.82rem;cursor:pointer;white-space:nowrap;min-width:120px;text-align:left">
             All categories ▾
           </button>
-          <div id="cat-filter-dropdown" hidden style="position:absolute;top:calc(100% + 4px);left:0;z-index:999;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.18);min-width:180px;max-height:260px;overflow-y:auto;padding:0.3rem 0">
+          <div id="cat-filter-dropdown" hidden style="white-space:normal;position:absolute;top:calc(100% + 4px);left:0;z-index:999;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.18);min-width:180px;max-height:260px;overflow-y:auto;padding:0.3rem 0">
             <div style="padding:0.3rem 0.7rem 0.35rem;display:flex;align-items:center;justify-content:space-between"><span style="font-size:0.78rem;color:var(--muted)">Click to toggle. Multiple OK.</span>  <button onclick="clearCatFilter()" style="background:none;border:none;font-size:0.8rem;color:var(--red);cursor:pointer;padding:0;margin-left:0.5rem">Clear all</button></div>
             <div id="cat-filter-options"></div>
           </div>
-        </div>
+        </div></span>
       </div>
       <div class="grid-controls-right">
         <button id="recipe-undo-btn" class="btn btn-ghost btn-undo" onclick="undoLastDelete()" disabled title="Undo last delete">↩ Undo</button>
@@ -723,7 +724,7 @@
         <input type="text" id="meal-search" placeholder="Search meals…"
           oninput="_dRenderMealGrid()"
           style="padding:0.35rem 0.65rem;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:0.85rem;min-width:160px;flex:1;max-width:280px"/>
-        <label style="font-size:0.85rem;color:var(--muted)">Sort:</label>
+        <span class="ctl-pair"><label style="font-size:0.85rem;color:var(--muted)">Sort:</label>
         <select id="meal-sort-select" onchange="applyMealSort()"
           style="padding:0.3rem 0.55rem;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:0.82rem">
           <option value="newest">Newest</option>
@@ -732,7 +733,7 @@
           <option value="za">Z → A</option>
           <option value="category">By Category</option>
           <option value="count">Most Recipes</option>
-        </select>
+        </select></span>
         <div id="meal-cat-filter-wrap" style="position:relative;display:inline-block">
           <button id="meal-cat-filter-btn" onclick="toggleMealCatFilter(event)"
             style="padding:0.3rem 0.55rem;border:1px solid var(--border);border-radius:5px;background:var(--card);color:var(--text);font-size:0.82rem;cursor:pointer;white-space:nowrap;min-width:130px;text-align:left">
@@ -1317,7 +1318,7 @@ let shopAddTarget = null;
 // Tabs
 // ══════════════════════════════════════════════════════════════
 // ── Page navigation history ────────────────────────────────────
-let _navHistory = ["scrape"];
+let _navHistory = ["saved"];   // the app opens on My Recipes
 let _navIdx     = 0;
 let _navSkip    = false; // true when navigating via back/fwd (don't push)
 
@@ -1327,6 +1328,7 @@ const _navPageNames = {
   shopping:  "Shopping List",
   meals:     "Meals",
   groupmeal: "Group Meal",
+  lines:     "Line Setup",
   cookbooks: "Cookbooks",
 };
 
@@ -1378,17 +1380,20 @@ function showTab(tab) {
   if (tab === "groupmeal") initGroupMealTab();
   if (tab === "lines") initLinesTab();
   if (tab === "cookbooks") initCookbooksTab();
-  // Push to history unless we're navigating back/forward
-  if (!_navSkip) {
-    // Truncate any forward history after current position
-    _navHistory = _navHistory.slice(0, _navIdx + 1);
-    // Only push if different from current
-    if (_navHistory[_navIdx] !== tab) {
-      _navHistory.push(tab);
-      _navIdx = _navHistory.length - 1;
-    }
-    _navUpdateBtns();
+  _navPush(tab);
+}
+
+// Push to history unless we're navigating back/forward
+function _navPush(tab) {
+  if (_navSkip) return;
+  // Truncate any forward history after current position
+  _navHistory = _navHistory.slice(0, _navIdx + 1);
+  // Only push if different from current
+  if (_navHistory[_navIdx] !== tab) {
+    _navHistory.push(tab);
+    _navIdx = _navHistory.length - 1;
   }
+  _navUpdateBtns();
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1597,10 +1602,14 @@ function openManageCollections() {
   renderCollManageList();
   document.getElementById("coll-new-name").value = "";
   document.getElementById("collections-modal-backdrop").hidden = false;
+  document.getElementById("coll-new-name").focus();
 }
 function closeManageCollections(e) {
-  if (!e || e.target === document.getElementById("collections-modal-backdrop"))
+  if (!e || e.target === document.getElementById("collections-modal-backdrop")) {
     document.getElementById("collections-modal-backdrop").hidden = true;
+    // An open recipe shows "+ Add a collection" until it re-renders with the picker
+    if (selectedRecipe && !document.getElementById("saved-detail-view").hidden) renderSavedDetail();
+  }
 }
 function renderCollManageList() {
   const el = document.getElementById("coll-manage-list");
@@ -1627,6 +1636,7 @@ async function createCollectionUI() {
   const c = await res.json();
   savedCollections.push(c);
   inp.value = "";
+  inp.focus();
   renderCollManageList();
   renderCollectionsBar();
   showToast(`Collection "${name}" added`);
@@ -2125,13 +2135,16 @@ async function bulkDelete() {
   const ids = [..._bulkSelected];
   if (!ids.length) return;
   if (!await showConfirm(`Delete ${ids.length} recipe${ids.length!==1?"s":""}? You can undo from the ↩ Undo button.`)) return;
+  const items = [];
   for (const id of ids) {
-    const r = savedRecipes.find(x => x.id === id);
-    if (!r) continue;
+    if (!savedRecipes.some(x => x.id === id)) continue;
+    const r = await _fullRecipe(id);
     await fetch(`/recipes/${id}`, { method: "DELETE" });
     savedRecipes = savedRecipes.filter(x => x.id !== id);
-    _pushUndo("recipe", id, r, r.title);
+    items.push({id, data: r});
   }
+  // One undo step brings the whole batch back
+  if (items.length) _pushUndo("recipes", null, items, `${items.length} recipe${items.length !== 1 ? "s" : ""}`);
   _bulkSelected.clear();
   updateSavedCount();
   await loadCollections();
@@ -2147,6 +2160,7 @@ async function openRecipe(id) {
   selectedRecipe = savedRecipes.find(r => r.id === id);
   if (!selectedRecipe) return;
   _recipeHistory = [];
+  _savedDetailId = null;
   document.getElementById("saved-list-view").hidden = true;
   document.getElementById("saved-detail-view").hidden = false;
   window.scrollTo(0, 0);                       // start recipe detail at the top
@@ -2181,9 +2195,19 @@ function backToList() {
   requestAnimationFrame(() => window.scrollTo(0, _savedListScrollY));
 }
 
+let _savedDetailId = null;
 function renderSavedDetail() {
+  // Keep a scaled servings value across re-renders of the same recipe (e.g. after an edit)
+  const prev = document.getElementById("scaler-saved");
+  const keep = prev && _savedDetailId === selectedRecipe.id ? prev.value : null;
+  _savedDetailId = selectedRecipe.id;
   document.getElementById("saved-detail-content").innerHTML = buildSavedHTML(selectedRecipe);
   initScaler("saved", selectedRecipe);
+  const input = document.getElementById("scaler-saved");
+  if (input && keep && keep !== input.value) {
+    input.value = keep;
+    input.dispatchEvent(new Event("input"));
+  }
 }
 
 async function patchRecipe() {
@@ -2749,6 +2773,23 @@ async function undoLastDelete() {
     }
     return;
   }
+  if (entry.type === "recipes") {
+    try {
+      for (const it of entry.data) {
+        const res = await fetch(`/recipes/${it.id}/restore`, {
+          method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(it.data)
+        });
+        if (!res.ok) throw new Error();
+      }
+      await loadSavedRecipes();
+      await loadCollections();
+      updateSavedCount(); updateCatFilter(); renderGrid();
+      showToast(`Restored ${entry.label}`);
+    } catch {
+      showAlert("Could not restore those recipes.");
+    }
+    return;
+  }
   try {
     const endpoint = entry.type === "recipe"
       ? `/recipes/${entry.id}/restore`
@@ -2782,10 +2823,17 @@ async function deleteRecipe() {
   _pushUndo("recipe", r.id, r, r.title);
 }
 
+// Full record (with photo) for the undo snapshot — list entries leave the image out
+async function _fullRecipe(id) {
+  try { const res = await fetch(`/recipes/${id}`); if (res.ok) return await res.json(); } catch {}
+  return savedRecipes.find(x => x.id === id);
+}
+
 async function deleteRecipeById(id, e) {
   e.stopPropagation();
-  const r = savedRecipes.find(x => x.id === id);
+  let r = savedRecipes.find(x => x.id === id);
   if (!r || !await showConfirm(`Delete "${r.title}"?`)) return;
+  r = await _fullRecipe(id);
   await fetch(`/recipes/${id}`, { method: "DELETE" });
   savedRecipes = savedRecipes.filter(x => x.id !== id);
   updateSavedCount(); updateCatFilter(); renderGrid();
@@ -2849,11 +2897,12 @@ async function saveRecipeNotes(val) {
   const idx = savedRecipes.findIndex(r => r.id === selectedRecipe.id);
   if (idx !== -1) savedRecipes[idx].notes = val;
   clearTimeout(saveRecipeNotes._t);
+  const r = selectedRecipe;   // still save if the user leaves the recipe before the timer fires
   saveRecipeNotes._t = setTimeout(async () => {
-    await fetch(`/recipes/${selectedRecipe.id}`, {
+    await fetch(`/recipes/${r.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...selectedRecipe }),
+      body: JSON.stringify({ ...r }),
     });
   }, 600);
 }
@@ -2864,11 +2913,12 @@ async function saveDirectionsText(val) {
   const idx = savedRecipes.findIndex(r => r.id === selectedRecipe.id);
   if (idx !== -1) savedRecipes[idx].directions_text = val;
   clearTimeout(saveDirectionsText._t);
+  const r = selectedRecipe;   // still save if the user leaves the recipe before the timer fires
   saveDirectionsText._t = setTimeout(async () => {
-    await fetch(`/recipes/${selectedRecipe.id}`, {
+    await fetch(`/recipes/${r.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...selectedRecipe }),
+      body: JSON.stringify({ ...r }),
     });
   }, 600);
 }
@@ -2898,7 +2948,10 @@ function inlineEditIngGroupName(el, gIdx) {
 function inlineEditIng(el, gIdx, iIdx) {
   const cur = selectedRecipe.ingredient_groups[gIdx].ingredients[iIdx];
   makeInlineInput(el, cur, val => {
-    if (val) selectedRecipe.ingredient_groups[gIdx].ingredients[iIdx] = val;
+    const list = selectedRecipe.ingredient_groups[gIdx].ingredients;
+    // Cleared, or a just-added line left untouched → remove it
+    if (!val || val === "New ingredient") list.splice(iIdx, 1);
+    else list[iIdx] = val;
     patchRecipe(); renderSavedDetail();
   }, {stretch: true});
 }
@@ -2948,7 +3001,9 @@ function inlineEditStepGroupName(el, gIdx) {
 function inlineEditStep(el, gIdx, sIdx) {
   const cur = selectedRecipe.instruction_groups[gIdx].steps[sIdx];
   makeInlineInput(el, cur, val => {
-    if (val) selectedRecipe.instruction_groups[gIdx].steps[sIdx] = val;
+    const list = selectedRecipe.instruction_groups[gIdx].steps;
+    if (!val || val === "New step") list.splice(sIdx, 1);
+    else list[sIdx] = val;
     patchRecipe(); renderSavedDetail();
   }, {textarea:true});
 }
@@ -3169,20 +3224,18 @@ function bestVolUnit(tsp) {
 
   const TSP=1, TBSP=3, CUP=48, QT=192, GAL=768;
 
-  if (tsp >= GAL) {
-    const gal = Math.floor(tsp / GAL); const rem = tsp % GAL;
-    let s = gal + " gal";
-    if (rem >= QT)  { s += " " + Math.floor(rem/QT) + " qt"; }
-    else if (rem >= CUP) { const c = niceCups(rem/CUP); if (c) s += " " + c; }
-    return s;
-  }
-
   if (tsp >= QT) {
-    const qt = Math.floor(tsp / QT); const rem = tsp % QT;
-    let s = qt + " qt";
-    if (rem >= CUP) { const c = niceCups(rem/CUP); if (c) s += " " + c; }
-    else if (rem >= TBSP) { s += " " + compoundTbspTsp(rem); }
-    return s;
+    // Big amounts: round to the nearest 1/8 cup (1/4 cup from a gallon up),
+    // then gal + qt + the leftover cups — never drop the leftover.
+    const step = tsp >= GAL ? CUP / 4 : CUP / 8;
+    tsp = Math.round(tsp / step) * step;
+    const gal = Math.floor(tsp / GAL); let rem = tsp - gal * GAL;
+    const qt  = Math.floor(rem / QT);  rem -= qt * QT;
+    const parts = [];
+    if (gal) parts.push(gal + " gal");
+    if (qt)  parts.push(qt + " qt");
+    if (rem > 0) parts.push(niceCups(rem / CUP) || bestVolUnit(rem));
+    return parts.join(" ");
   }
 
   if (tsp >= CUP/4) { // >= 1/4 cup (12 tsp)
@@ -4415,12 +4468,14 @@ async function restoreBackup(path, filename, cookbookName) {
 let _updateInstallerUrl = null;  // set when an update is found
 let _updateReleaseUrl   = null;  // GitHub releases page URL
 
+let _appVersion = "";
 async function loadVersionInfo() {
   try {
     const r = await fetch("/api/version");
     const d = await r.json();
     const el = document.getElementById("settings-version-str");
     if (el) el.textContent = d.version || "dev";
+    _appVersion = d.version || "";
   } catch (_) {}
 }
 
@@ -4552,6 +4607,7 @@ async function startInstallUpdate() {
 
 // Check for updates silently 5 seconds after page load (only in packaged app)
 setTimeout(() => {
+  loadVersionInfo();
   if (window.pywebview) checkForUpdates(false);
 }, 5000);
 
@@ -4879,7 +4935,6 @@ const HELP_CONTENT = {
       <li><strong>Dark Mode</strong> — toggle between light and dark themes</li>
       <li><strong>Font Size</strong> — enter a size from 10–28px; all text scales proportionally</li>
       <li><strong>Accent Color</strong> — change the red/primary colour used throughout the app</li>
-      <li><strong>Text Color</strong> — change the main text colour (light mode only)</li>
       <li><strong>View Mode</strong> — switch between <em>Grid</em> (cards) and <em>List</em> view. Applies to My Recipes, Meals, Group Meals, Cookbooks, and the Shopping List recipe browser</li>
     </ul>
     <h4>File</h4>
@@ -4893,7 +4948,7 @@ const HELP_CONTENT = {
     <div style="text-align:center;padding:1rem 0">
       <div style="font-size:2.5rem;margin-bottom:0.4rem">🍴</div>
       <div style="font-size:1.1rem;font-weight:800;margin-bottom:0.2rem">MacleayChef</div>
-      <div style="font-size:0.85rem;color:var(--muted)">Version v1.2.9 &nbsp;·&nbsp; Built with Flask &amp; pywebview</div>
+      <div style="font-size:0.85rem;color:var(--muted)">Version <span class="app-version-txt"></span> &nbsp;·&nbsp; Built with Flask &amp; pywebview</div>
     </div>
     <h4>What it is</h4>
     <p>A fully offline desktop recipe management app. All your data is stored locally in <em>.cookbook</em> files — nothing is sent to the cloud.</p>
@@ -4935,6 +4990,7 @@ function _renderHelp(topicId) {
   // Content
   const helpContent = document.getElementById("help-content");
   helpContent.innerHTML = HELP_CONTENT[topicId] || "<p>No content yet.</p>";
+  helpContent.querySelectorAll(".app-version-txt").forEach(el => { el.textContent = _appVersion ? "v" + String(_appVersion).replace(/^v/, "") : ""; });
   helpContent.scrollTop = 0;
 }
 function closeHelpPanel(e) {
@@ -5885,12 +5941,8 @@ async function updateMealDefaultServings(val) {
       categories: m.categories||[], category: m.category||null, notes: m.notes||null})
   });
   // Update placeholder text on per-recipe inputs without full re-render
-  m.recipes.forEach(r => {
-    if (r.recipe_servings == null) {
-      const inputs = document.querySelectorAll(`#meal-recipe-list input[type=number]`);
-      inputs.forEach(inp => { if (!inp.value) inp.placeholder = ds != null ? `Default (${ds})` : "Servings…"; });
-    }
-  });
+  document.querySelectorAll(`#meal-recipe-list input[type=number], #meal-dietary-list input[type=number]`)
+    .forEach(inp => { inp.placeholder = ds != null ? `Default (${ds})` : "Servings…"; });
 }
 
 async function createMeal() {
@@ -6818,7 +6870,9 @@ function renderGroupMealList() {
   if (shBtn) shBtn.hidden = hiddenCount === 0 && !_gmShowHidden;
   if (!gmFiltered.length) {
     container.className = "recipe-grid";
-    container.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:3rem 0;color:var(--muted)">${savedGroupMeals.length ? "No group meals match your search." : "No group meals yet. Click <strong>+ New Group Meal</strong> to create one."}</div>`;
+    container.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:3rem 0;color:var(--muted)">${!savedGroupMeals.length ? "No group meals yet. Click <strong>+ New Group Meal</strong> to create one."
+      : (!gmSearch && !_gmActiveCatFilters.size && hiddenCount === savedGroupMeals.length) ? "All group meals are hidden. Click <strong>Show hidden</strong> to see them."
+      : "No group meals match your search."}</div>`;
     return;
   }
   const hideBtn = g => {
@@ -7264,7 +7318,7 @@ function renderGroupMealDetail() {
             <span class="gm-meal-chevron">▶</span>
             <span class="gm-meal-name">${esc(m.name)}</span>
             <span class="gm-meal-meta">${rc} recipe${rc!==1?"s":""}</span>
-            <span style="margin-left:auto;display:flex">${_gmShopBox(sid, mealIds, !mealIds.some(id => shopEx.has(id)))}</span>
+            <span style="margin-left:auto;display:flex">${_gmShopBox(sid, mealIds, !mealIds.some(id => shopEx.has(id)), mealIds.some(id => shopEx.has(id)) && !mealIds.every(id => shopEx.has(id)))}</span>
             <input type="number" class="gm-srv-input" min="0" step="0.5"
               placeholder="${mealPh}" value="${mealVal}"
               title="Servings for this meal. Set to 0 to skip entire meal from print/shopping."
@@ -7381,6 +7435,7 @@ function renderGroupMealDetail() {
   // expand/collapse is now wired via inline onclick on .gm-meal-header
   if (available.length) renderGroupMealBrowser();
   if (savedRecipes.length) renderGroupMealRecipeBrowser();
+  document.querySelectorAll("#tab-groupmeal input[data-partial]").forEach(i => { i.indeterminate = true; });
   // Restore page + inner-list scroll so edits don't jump anything to the top
   Object.entries(_keepScrolls).forEach(([id, top]) => {
     const el = document.getElementById(id);
@@ -7549,11 +7604,12 @@ async function updateGroupMealDietaryServings(slotOrMealId, val, useSlot) {
 
 // 🛒 tick box: checked = on the shopping list. Unticking leaves those recipes
 // off the shopping list only — they still print and keep their servings.
-function _gmShopBox(sid, ids, checked) {
+function _gmShopBox(sid, ids, checked, partial) {
   if (sid == null || !ids.length) return "";
-  return `<label title="Include in shopping list" onclick="event.stopPropagation()"
-    style="display:inline-flex;align-items:center;gap:2px;font-size:0.8rem;cursor:pointer;flex-shrink:0;opacity:${checked?1:0.45}">
-    <input type="checkbox" ${checked?"checked":""} style="cursor:pointer"
+  // partial = some of the meal's recipes are off the list (shown as a dash)
+  return `<label title="${partial ? "Some recipes are left off the shopping list" : "Include in shopping list"}" onclick="event.stopPropagation()"
+    style="display:inline-flex;align-items:center;gap:2px;font-size:0.8rem;cursor:pointer;flex-shrink:0;opacity:${checked||partial?1:0.45}">
+    <input type="checkbox" ${checked?"checked":""} ${partial?"data-partial":""} style="cursor:pointer"
       onchange="toggleGmShop(${sid},[${ids.join(",")}],this.checked)"/>🛒</label>`;
 }
 
@@ -7887,9 +7943,20 @@ function _groupSlotPairs(gm, forShopping) {
     if (!r) return;
     const eff = rs[mr.id] != null ? rs[mr.id] : base;
     const f = _factor(r, eff);
-    if (f !== null) out.push({recipe: r, factor: f});
+    if (f !== null) out.push({recipe: r, factor: f, dietary: !!mr.dietary});
   });
   return out;
+}
+
+// Printable recipe blocks for one slot — dietary ones under a heading, like a meal print
+const _DIET_HEADING = `<div style="text-align:center;margin:0 0 1rem;padding-bottom:0.5rem;border-bottom:2px solid #333"><h1 style="margin:0">🥗 Dietary Recipes</h1></div>`;
+function _groupSlotBlocks(gm) {
+  let headed = false;
+  return _groupSlotPairs(gm).map(({recipe, factor, dietary}) => {
+    const head = dietary && !headed ? _DIET_HEADING : "";
+    if (dietary) headed = true;
+    return `<div>${head}${buildRecipeBlock(recipe, factor)}</div>`;
+  });
 }
 
 function _groupAllRecipes(forShopping) {
@@ -7917,7 +7984,7 @@ async function _groupRecipePagesInterleaved() {
   const pages = [];
   const seenMeal = new Set();
   for (const gm of (g.meals||[])) {
-    _groupSlotPairs(gm).forEach(({recipe, factor}) => pages.push(`<div>${buildRecipeBlock(recipe, factor)}</div>`));
+    pages.push(..._groupSlotBlocks(gm));
     if (gm.type === "meal" && gm.id != null && !seenMeal.has(gm.id)) {
       seenMeal.add(gm.id);
       for (const sec of await _diagramSectionsForMeal(gm.id)) pages.push(sec);
@@ -8179,75 +8246,40 @@ async function exportGroupFolderPdf() {
   const shopCatHtml = buildShoppingHtml(shopCatEntries, g.name + " — Shopping List");
   if (shopCatHtml) pdfs.push({ filename: "Shopping List by Category", html: shopCatHtml });
 
-  // Recipe pairs for one slot, with batch scaling applied (matches print/shopping)
-  const _slotRecipePairs = gm => {
-    if (gm.type === "header") return [];
-    if (gm.type === "recipe") {
-      const r = savedRecipes.find(r => r.id === gm.id);
-      if (!r) return [];
-      const effectiveServings = gm.servings != null ? gm.servings : (g.default_servings != null ? g.default_servings : null);
-      if (effectiveServings !== null && parseFloat(effectiveServings) === 0) return [];
-      const origNum = r.servings_num || parseServingsNumJS(r.servings) || null;
-      let factor = 1;
-      if (effectiveServings && origNum && origNum > 0) {
-        factor = _applyBatchScale(parseFloat(effectiveServings), origNum, r.scale_by_batch) / origNum;
-      }
-      return [{r, factor}];
-    }
-    const full = savedMeals.find(m => m.id === gm.id);
-    if (!full || !full.recipes || !full.recipes.length) return [];
-    const rs = gm.recipe_servings || {};
-    const mealServings = gm.servings != null ? gm.servings
-                       : (g.default_servings != null ? g.default_servings : null);
-    if (mealServings !== null && parseFloat(mealServings) === 0) return [];
-    return full.recipes.map(mr => {
-      const r = savedRecipes.find(r => r.id === mr.id);
-      if (!r) return null;
-      const effectiveServings = rs[mr.id] != null ? rs[mr.id] : mealServings;
-      if (effectiveServings !== null && parseFloat(effectiveServings) === 0) return null;
-      const origNum = r.servings_num || parseServingsNumJS(r.servings) || null;
-      let factor = 1;
-      if (effectiveServings && origNum && origNum > 0) {
-        factor = _applyBatchScale(parseFloat(effectiveServings), origNum, r.scale_by_batch) / origNum;
-      }
-      return {r, factor};
-    }).filter(Boolean);
+  // One PDF document from recipe blocks + the tied serving-line diagrams
+  const _doc = async (blocks, mealIds) => {
+    const body = blocks.join(`<div class="page-break"></div>`) + await _diagramPagesForMeals(mealIds);
+    return `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+<title>Recipes</title><style>${PRINT_CSS}</style></head><body>${body}</body></html>`;
   };
 
   const hasSections = (g.meals || []).some(s => s.type === "header");
   if (hasSections) {
     // One PDF per section, named after the section title. Slots that come
     // before the first section header are grouped under the group meal's name.
-    let current = { name: g.name, pairs: [] };
+    let current = { name: g.name, blocks: [], mealIds: [] };
     const sections = [current];
     (g.meals || []).forEach(gm => {
       if (gm.type === "header") {
-        current = { name: gm.name, pairs: [] };
+        current = { name: gm.name, blocks: [], mealIds: [] };
         sections.push(current);
         return;
       }
-      current.pairs.push(..._slotRecipePairs(gm));
+      current.blocks.push(..._groupSlotBlocks(gm));
+      if (gm.type === "meal") current.mealIds.push(gm.id);
     });
-    sections.forEach(sec => {
-      if (sec.pairs.length) {
-        pdfs.push({
-          filename: sec.name,
-          html: buildMealRecipesHtml(sec.pairs.map(p => p.r), sec.pairs.map(p => p.factor))
-        });
-      }
-    });
+    for (const sec of sections) {
+      if (sec.blocks.length) pdfs.push({ filename: sec.name, html: await _doc(sec.blocks, sec.mealIds) });
+    }
   } else {
-    // No sections: one PDF per meal / direct recipe (original behaviour)
-    (g.meals || []).forEach(gm => {
-      const pairs = _slotRecipePairs(gm);
-      if (!pairs.length) return;
-      const fname = gm.type === "recipe" ? pairs[0].r.title
+    // No sections: one PDF per meal / direct recipe
+    for (const gm of (g.meals || [])) {
+      const blocks = _groupSlotBlocks(gm);
+      if (!blocks.length) continue;
+      const fname = gm.type === "recipe" ? ((savedRecipes.find(r => r.id === gm.id) || {}).title || "Recipe")
                   : (savedMeals.find(m => m.id === gm.id) || {}).name || "Meal";
-      pdfs.push({
-        filename: fname,
-        html: buildMealRecipesHtml(pairs.map(p => p.r), pairs.map(p => p.factor))
-      });
-    });
+      pdfs.push({ filename: fname, html: await _doc(blocks, gm.type === "meal" ? [gm.id] : []) });
+    }
   }
 
   if (!pdfs.length) { showAlert("No content to export."); return; }
@@ -8289,6 +8321,18 @@ document.addEventListener("click",    () => { const m = document.getElementById(
 document.addEventListener("scroll",   () => { const m = document.getElementById("ctx-menu"); if (m) m.style.display = "none"; }, true);
 document.addEventListener("keydown",  e => { if (e.key === "Escape") { const m = document.getElementById("ctx-menu"); if (m) m.style.display = "none"; }});
 
+// Escape closes the top dialog (same as clicking outside it). While typing in a
+// field, the first Escape just leaves the field.
+document.addEventListener("keydown", e => {
+  if (e.key !== "Escape" || e.defaultPrevented) return;
+  const open = [...document.querySelectorAll(".img-modal-backdrop")].filter(b => !b.hidden && b.onclick);
+  const top = open[open.length - 1];
+  if (!top) return;
+  const ae = document.activeElement;
+  if (ae && top.contains(ae) && (ae.matches("input, textarea, select") || ae.isContentEditable)) { ae.blur(); return; }
+  top.click();
+});
+
 // ── Global Enter-to-commit ─────────────────────────────────────
 // Pressing Enter in any single-line input commits the value (blur fires the
 // field's change/save handler). Also prevents any stray default behaviour —
@@ -8300,7 +8344,19 @@ document.addEventListener("keydown", e => {
   if (["checkbox", "radio", "file", "button", "submit"].includes(el.type)) return;
   if (el.id === "prompt-modal-input") return; // prompt modal has its own handler
   e.preventDefault();
+  // In a dialog, Enter presses the field's own "Add" button, or the dialog's
+  // main button when this is its only text field (photo URL, servings, name…)
+  const modal = el.closest(".img-modal");
+  let btn = null;
+  if (modal) {
+    btn = el.parentElement.querySelector(".btn-primary");
+    const fields = [...modal.querySelectorAll("input")].filter(i =>
+      i.offsetParent && !["checkbox", "radio", "file", "button", "submit", "color"].includes(i.type));
+    if (!btn && fields.length === 1)
+      btn = [...modal.querySelectorAll(".btn-primary")].find(b => b.offsetParent && !b.disabled) || null;
+  }
   el.blur();
+  if (btn) btn.click();
 });
 function _ctxCut()       { if (_ctxTarget) { _ctxTarget.focus(); document.execCommand("cut");  } }
 function _ctxCopy()      { document.execCommand("copy"); }
@@ -8485,6 +8541,7 @@ async function openLineDiagram(id) {
   document.getElementById("lines-list-view").hidden = true;
   document.getElementById("lines-editor-view").hidden = false;
   window.scrollTo(0, 0);
+  _navPush("lines");
   lineRenderEditor();
 }
 
@@ -8506,7 +8563,7 @@ function lineRenderEditor() {
     <div class="line-palette-group">
       <h4>${g.title}</h4>
       ${g.types.map(tk => { const t = LINE_ITEM_TYPES[tk];
-        return `<div class="line-tile" style="border-left-color:${t.color}" onpointerdown="lineStartCreate(event,'${tk}')"><span class="line-tile-sw" style="border-color:${t.color};border-radius:${swRad(t.shape)}"></span><span>${esc(t.label)}</span></div>`;
+        return `<div class="line-tile" style="border-left-color:${t.color}" onpointerdown="lineStartCreate(event,'${tk}')"><span class="line-tile-sw" style="border-color:${t.color};border-radius:${swRad(t.shape)}"></span><span style="min-width:0">${esc(t.label).replace(/\//g, "/<wbr>")}</span></div>`;
       }).join("")}
     </div>`).join("");
   view.innerHTML = `
@@ -8744,6 +8801,8 @@ async function lineCopyDiagram() {
 async function lineDeleteDiagram() {
   const d = selectedDiagram; if (!d) return;
   if (!await showConfirm("Delete this line setup? This can’t be undone.")) return;
+  clearTimeout(_lineSaveTimer);
+  selectedDiagram = null;   // nothing left to flush-save
   await fetch(`/line-diagrams/${d.id}`, {method:"DELETE"});
   backToLinesList();
 }
@@ -8920,6 +8979,24 @@ function doPrint(fullHtml) {
 }
 
 const CHANGELOG = [
+  {
+    version: "v1.13.3",
+    notes: [
+      "Fixed: recipes imported from text/Meal-Master/CSV files (and some older recipes) printed and shopped with NO ingredients until opened",
+      "Fixed: large amounts dropped their leftover — e.g. 26⅔ cups showed as \"1 gal 2 qt\"; now \"1 gal 2 qt 2¾ cups\". 4½ cups shows \"1 qt ½ cup\" instead of \"1 qt 8 tbsp\"",
+      "Fixed: renaming the active cookbook failed on Windows (file in use)",
+      "Fixed: Undo after deleting a recipe from its card (or Select → Delete) lost the photo and collection; a bulk delete now undoes in one step",
+      "Fixed: group-meal Export PDF ignored the Dietary setting and left out serving-line setups",
+      "Group-meal prints label dietary recipes under a \"Dietary Recipes\" heading, like meal prints",
+      "A meal's 🛒 box shows a dash when only some of its recipes are on the shopping list",
+      "Enter adds in dialogs (new collection, photo link, shopping servings…); Escape closes dialogs",
+      "Editing an ingredient keeps the servings you scaled to; clearing an ingredient or step removes it",
+      "Notes and directions are saved even if you leave the recipe right after typing",
+      "Imports: \"Serves 20\" (no colon) is read as servings; Meal-Master units (c, tb, t…) become cups/tbsp/tsp so they scale",
+      "Back button covers Line Setup; About shows the real version; errors now show a message instead of doing nothing",
+      "Smaller fixes: meal default-servings hint on dietary rows, toolbar labels stay with their dropdowns on narrow windows, \"all hidden\" message for group meals",
+    ]
+  },
   {
     version: "v1.13.2",
     notes: [
